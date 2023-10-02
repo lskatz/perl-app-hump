@@ -50,7 +50,8 @@ $hump->run_makefile();
 ## Installation
 
 ```bash
-cd hump
+git clone https://github.com/lskatz/perl-app-hump
+cd perl-app-hump
 perl Makefile.PL
 make
 make install
