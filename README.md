@@ -12,6 +12,9 @@ without thinking about things like an intense configuration file.
 
 ## Example
 
+This is a small example of how to print a hello world to stdout
+using dependencies.
+
 ```perl
 use strict;
 use warnings;
@@ -44,8 +47,11 @@ my %make = (
 
 my $hump = App::Hump->new();
 $hump->write_makefile(\%make);
-$hump->run_makefile();
+my $helloworld = $hump->run_makefile();
+print "$helloworld\n";
 ```
+
+Results in `hello world\n`.
 
 ## Installation
 
