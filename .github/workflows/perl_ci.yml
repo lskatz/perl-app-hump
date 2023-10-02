@@ -23,8 +23,8 @@ jobs:
           install-modules-args: --with-develop --with-configure --force --no-test
           enable-modules-cache: true
           multi-thread: true
-          install-modules: |
-            ""
+         #install-modules: |
+         #  ""
       - name: cpanm installdeps --no-test --force
         run: cpanm --installdeps . --no-test --force
       - run: perl -V
