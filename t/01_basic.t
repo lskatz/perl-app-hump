@@ -14,7 +14,7 @@ use_ok 'App::Hump';
 use App::Hump qw/$make_target $make_deps/;
 
 subtest 'basic' => sub{
-  plan tests => 1;
+  plan tests => 2;
 
   my %make = (
     all => {
@@ -49,6 +49,20 @@ subtest 'basic' => sub{
   $stdout =~ s/^\s+|\s+$//g;
 
   is($stdout, "Hello World", "Hello World!");
+
+  my $dag = $hump->write_dag();
+
+  #note `cat $hump->{makefile}`;
+  #note ' ';
+  #note $dag;
+
+  subtest 'dag' => sub{
+    my @line = split(/\n/, $dag);
+    
+    is(scalar(grep {/hello.txt\s+-->\s+all/} @line), 1, "hello.txt --> all");
+    is(scalar(grep {/world.txt\s+-->\s+all/} @line), 1, "world.txt --> all");
+    is(scalar(grep {/graph\s+(TB|TD|BT|RL)/} @line), 1, "graph TD");
+  };
 };
 
 

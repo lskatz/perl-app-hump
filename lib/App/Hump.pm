@@ -17,15 +17,14 @@ use Carp qw/croak carp confess/;
 use FindBin qw/$RealBin/;
 
 use version 0.77;
-our $VERSION = '0.1.0';
+our $VERSION = '0.2.0';
 
 use Exporter qw/import/;
 our @EXPORT_OK = qw(
   $make_target $make_dep $make_deps
            );
 
-# Redefine how die looks
-#local $SIG{'__DIE__'} = sub { my $e = $_[0]; $e =~ s/(at [^\s]+? line \d+\.$)/\nStopped $1/; die("$0: ".(caller(1))[3].": ".$e); };
+use overload '""' => 'toString';
 
 my $startTime = time();
 sub logmsg{
@@ -153,6 +152,36 @@ sub new{
 
   return $self;
 }
+=pod
+
+=over
+
+=item $hump->toString
+
+Returns the entire contents of the Makefile.
+This is also the method for when the object is stringified, 
+e.g., 
+
+    my $hump = App::Hump->new;
+    print "$hump\n";
+
+To get the actual Makefile path, use `$$hump{makefile}`.
+
+=back
+
+=cut
+
+sub toString{
+  my($self) = @_;
+
+  local $/=undef;
+
+  open(my $fh, "<", $$self{makefile}) or croak "ERROR: could not open $$self{makefile}: $!";
+  my $content = <$fh>;
+  close $fh;
+
+  return $content;
+}
 
 =pod
 
@@ -219,6 +248,9 @@ MAKEFLAGS += --no-builtin-variables
 
 Runs the makefile that was created by $hump->write_makefile.
 Returns any stdout.
+stdout is also saved into `$$hump{tempdir}/make.out`.
+
+stderr is saved in `$$hump{tempdir}/make.log`.
 
 =back
 
@@ -238,6 +270,57 @@ sub run_makefile{
   close $fh;
   
   return $stdout;
+}
+
+=pod
+
+=over
+
+=item $hump->write_dag
+
+Creates a directed acyclic graph (DAG) and returns it in a string
+
+=back
+
+=cut
+
+# Define a subroutine to convert Makefile to Mermaid format
+sub write_dag{
+    my($self) = @_;
+
+    my $makefile_path = $$self{makefile};
+
+    # Read the Makefile and extract dependency information
+    my %reverse_dependencies;
+    my $target;
+    open(my $makefile, '<', $makefile_path) or die "Could not open Makefile: $!";
+    while (<$makefile>) {
+        chomp;
+        if (/^(\S+):(.*)$/) {
+            # Extract target and dependencies
+            $target = $1;
+            my @deps = grep{length($_) > 0}
+                         split /\s+/, $2;
+
+            for my $dep(@deps){
+              push(@{$reverse_dependencies{$dep}}, $target);
+            }
+        }
+    }
+    close($makefile);
+
+    # Generate Mermaid syntax
+    my $mermaid_code = "graph TD;\n";
+    foreach my $dep(sort keys %reverse_dependencies) {
+        if(scalar(@{$reverse_dependencies{$dep}}) < 1){
+          next;
+        }
+        foreach my $target (@{$reverse_dependencies{$dep}}) {
+            $mermaid_code .= "  $dep --> $target;\n";
+        }
+    }
+
+    return $mermaid_code;
 }
 
 =pod

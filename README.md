@@ -49,9 +49,19 @@ my $hump = App::Hump->new();
 $hump->write_makefile(\%make);
 my $helloworld = $hump->run_makefile();
 print "$helloworld\n";
+
 ```
 
 Results in `hello world\n`.
+
+Creating a DAG:
+
+```perl
+print $hump->write_dag
+```
+
+The output of the DAG can be displayed in a markdown file on github
+or by going to <https://mermaid.live>.
 
 ## Installation
 
@@ -65,6 +75,7 @@ make install
 
 ## Help
 
-You can view more usage by running `perldoc lib/App/Hump.pm`
-or by filing a ticket under the github issues tab.
+You can view more usage by running `perldoc lib/App/Hump.pm`.
+
+Ask for any more help by filing a ticket under the github issues tab.
 
