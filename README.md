@@ -63,6 +63,14 @@ print $hump->write_dag
 The output of the DAG can be displayed in a markdown file on github
 or by going to <https://mermaid.live>.
 
+```mermaid
+graph TD;
+  all --> .DEFAULT;
+  all --> .PHONY;
+  hello.txt --> all;
+  world.txt --> all;
+```
+
 ## Installation
 
 ```bash
