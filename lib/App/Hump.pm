@@ -17,7 +17,7 @@ use Carp qw/croak carp confess/;
 use FindBin qw/$RealBin/;
 
 use version 0.77;
-our $VERSION = '0.2.0';
+our $VERSION = '0.3.0';
 
 use Exporter qw/import/;
 our @EXPORT_OK = qw(
@@ -276,16 +276,17 @@ sub run_makefile{
 
 =over
 
-=item $hump->write_dag
+=item $hump->dag
 
-Creates a directed acyclic graph (DAG) and returns it in a string
+Creates a directed acyclic graph (DAG) and returns it in a string.
+This string is formatted as Mermaid.
 
 =back
 
 =cut
 
 # Define a subroutine to convert Makefile to Mermaid format
-sub write_dag{
+sub dag{
     my($self) = @_;
 
     my $makefile_path = $$self{makefile};
