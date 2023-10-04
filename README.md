@@ -47,8 +47,15 @@ my %make = (
 
 my $hump = App::Hump->new();
 $hump->write_makefile(\%make);
-my $helloworld = $hump->run_makefile();
+my $helloworld = $hump->make();
 print "$helloworld\n";
+
+
+# Saving a target hello.txt
+my $err = $hump->cp("hello.txt", "./hello.txt");
+# Error checking
+die $err if($err);
+
 
 ```
 

@@ -24,6 +24,7 @@ WriteMakefile1(
   },
   TEST_REQUIRES => {
     'Test::More'     => 0.47,
+    'Pod::Checker'   => 0,
   },
   LICENSE => 'mit',
   MIN_PERL_VERSION => '5.10.0',

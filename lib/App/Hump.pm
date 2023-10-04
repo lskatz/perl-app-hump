@@ -10,14 +10,16 @@ use strict;
 use warnings;
 
 use File::Basename qw/basename fileparse dirname/;
+use File::Copy qw//; # We redefine cp and so we cannot import it without warnings
 use File::Temp qw/tempdir tempfile/;
+use File::Path qw/make_path/;
 use Data::Dumper qw/Dumper/;
 use File::Which qw/which/;
 use Carp qw/croak carp confess/;
 use FindBin qw/$RealBin/;
 
 use version 0.77;
-our $VERSION = '0.3.0';
+our $VERSION = '0.4.0';
 
 use Exporter qw/import/;
 our @EXPORT_OK = qw(
@@ -73,8 +75,15 @@ Uses the power of `make` in the backend.
 
   my $hump = App::Hump->new();
   $hump->write_makefile(\%make);
-  $hump->run_makefile();
+  my $makeHash = $hump->make();
+  print $$makeHash{stdout}."\n";
+  print "STDERR was: ".$$makeHash{stderr}."\n";
 
+  my $helloInfo = $hump->make("hello.txt");
+  print $$helloInfo{stdout};
+
+  my $err = $hump->("hello.txt", "./hello.txt");
+  die $err if($err);
 
 =head1 DESCRIPTION
 
@@ -126,6 +135,12 @@ Create a new Hump.
   tempdir      ''         A directory to store temporary files.
                           If not supplied, will create something in temp storage.
 
+  These \%options variables (numcpus, etc) are exposed as, e.g., $hump->{numcpus}.
+  Other exposed variables include:
+  $hump->{makefile}       Path to the Makefile
+  $hump->{workdir}        Where the Makefile is
+  $hump->{logdir}         Where stderr and stdout get written to
+
 =back
 
 =cut
@@ -142,10 +157,16 @@ sub new{
   my $self={
     numcpus    => $$settings{numcpus},
     tempdir    => $$settings{tempdir},
-    makefile   => "$$settings{tempdir}/Makefile",
+    makefile   => "$$settings{tempdir}/work/Makefile",
+    workdir    => "$$settings{tempdir}/work",
+    logdir     => "$$settings{tempdir}/log",
   };
 
-  open(my $fh, ">", $$self{makefile}) or croak "ERROR: could not create $$self{makefile}: $!";
+  # initialize directory structure
+  mkdir($$self{workdir});
+  mkdir($$self{logdir});
+
+  open(my $fh, ">", $$self{makefile}) or die "ERROR: could not create $$self{makefile}: $!";
   close $fh;
 
   bless($self);
@@ -176,7 +197,7 @@ sub toString{
 
   local $/=undef;
 
-  open(my $fh, "<", $$self{makefile}) or croak "ERROR: could not open $$self{makefile}: $!";
+  open(my $fh, "<", $$self{makefile}) or die "ERROR: could not open $$self{makefile}: $!";
   my $content = <$fh>;
   close $fh;
 
@@ -226,7 +247,9 @@ MAKEFLAGS += --no-builtin-variables
     my $dep = $rule->{DEP};
 
     # If there is an entry for PHONY, then show that this target is phony
-    print $fh ".PHONY: $target\n" if $rule->{PHONY} or ! $rule->{DEP};
+    # todo consider supporting PHONY in the documentation but for now it's
+    # undocumented and therefore I will not support it here.
+    #print $fh ".PHONY: $target\n" if $rule->{PHONY} or ! $rule->{DEP};
 
     # Make the actual Makefile rule here
     print $fh "$target: " . join(" ", @$dep) . "\n";
@@ -244,32 +267,91 @@ MAKEFLAGS += --no-builtin-variables
 
 =over
 
-=item $hump->run_makefile()
+=item $hump->make($target)
 
 Runs the makefile that was created by $hump->write_makefile.
-Returns any stdout.
-stdout is also saved into `$$hump{tempdir}/make.out`.
+If $target is not supplied, it defaults to 'all'.
 
-stderr is saved in `$$hump{tempdir}/make.log`.
+Returns a reference to a hash of information:
+
+    stdout
+    stderr
+    path     Path to the target
+    cmd      The make command used
+
+stdout is also saved into `$$hump{tempdir}/$target.out`.
+
+stderr is saved in `$$hump{tempdir}/$target.log`.
 
 =back
 
 =cut
 
-sub run_makefile{
-  my($self) = @_;
+sub make{
+  my($self, $target) = @_;
 
-  my $mode = 'all';
-  my $cmd = "nice make -C $$self{tempdir} --quiet -f $$self{makefile} $mode -j $$self{numcpus} > $$self{tempdir}/make.out 2>$$self{tempdir}/make.log";
+  $target //= 'all';
+
+  my $stdout = "$$self{logdir}/$target.out";
+  my $stderr = $stdout;
+  $stderr =~ s/out$/log/;
+
+  if(!-d dirname($stdout)){
+    make_path(dirname($stdout), {error => \my $err});
+    if($err){
+      die "ERROR: could not make a directory for $stdout: ".Dumper $err;
+    }
+  }
+
+  my $cmd = "nice make -C $$self{workdir} --quiet -f $$self{makefile} $target -j $$self{numcpus} >> $stdout 2>>$stderr";
   system($cmd);
-  croak "ERROR running $cmd: $!\n\nStderr was:\n".`cat $$self{tempdir}/make.log` if($?);
+  confess "ERROR running $cmd: $!\n\nStderr was:\n".`cat $stderr` if($?);
 
-  open(my $fh, "<", "$$self{tempdir}/make.out") or croak "ERROR: could not open $$self{tempdir}/make.out for reading: $!";
+  open(my $stdoutFh, "<", $stdout) or die "ERROR: could not open $stdout for reading: $!";
   local $/=undef;
-  my $stdout = <$fh>;
-  close $fh;
+  my $stdoutContent = <$stdoutFh>;
+  close $stdoutFh;
   
-  return $stdout;
+  open(my $stderrFh, "<", $stderr) or die "ERROR: could not open $stderr for reading: $!";
+  local $/=undef;
+  my $stderrContent = <$stderrFh>;
+  close $stderrFh;
+  
+  return {
+    stdout => $stdoutContent,
+    stderr => $stderrContent,
+    path   => "$$self{workdir}/$target",
+    cmd    => $cmd,
+  }
+}
+
+=pod
+
+=over
+
+=item $hump->cp($target, $to)
+
+Copies a target to a directory that is not in the temporary directory.
+Useful if you want to hold onto any temporary files.
+Returns empty string on success.
+If error, returns a string explaining the error.
+
+=back
+
+=cut
+
+sub cp{
+  my($self, $from, $to) = @_;
+
+  my $path = "$$self{workdir}/$from";
+  if(!-e $path){
+    return "ERROR: could not copy target $from because it does not exist at $path";
+  }
+
+  File::Copy::cp($path, $to)
+    or return "ERROR copying file $path => $to: $!";
+
+  return "";
 }
 
 =pod
